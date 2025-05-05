@@ -273,7 +273,7 @@ async function saveBillToBackend() {
   console.log('Bill data to save:', billData); // Debug log
 
   try {
-    const response = await fetch('http://localhost:5000/api/bills', {
+    const response = await fetch('/api/bills', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
