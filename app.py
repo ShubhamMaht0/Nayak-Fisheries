@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, Response
 import sqlite3
 from datetime import datetime
+from zoneinfo import ZoneInfo 
 from flask_cors import CORS
 import os
 from werkzeug.utils import secure_filename
@@ -785,16 +786,39 @@ def get_receipt(tx_id):
     finally:
         conn.close()
 
+# Get all transactions
+@app.route('/api/transactions', methods=['GET'])
+def get_all_transactions():
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, transaction_type, payment_method, amount, 
+                   client_name, client_phone, image_name,
+                   strftime('%Y-%m-%d %H:%M:%S', created_at) as created_at
+            FROM financial_transactions
+            ORDER BY created_at DESC
+            LIMIT 100
+        """)
+        
+        transactions = cursor.fetchall()
+        return jsonify([dict(tx) for tx in transactions])
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
 @app.route('/api/transactions/search', methods=['GET'])
 def search_transactions():
     conn = None
     try:
         # Get and sanitize search parameters
-        name = request.args.get('name', '').strip()
-        phone = request.args.get('phone', '').strip()
-
-        # if not name and not phone:
-        #     return jsonify({'error': 'Please provide name or phone to search'}), 400
+        start_date = request.args.get('start_date', '').strip()
+        end_date = request.args.get('end_date', '').strip()
 
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -817,13 +841,15 @@ def search_transactions():
         """
         params = []
 
-        if name:
-            query += " AND client_name LIKE ?"
-            params.append(f'%{name}%')
+
+        # Date filtering
+        if start_date:
+            query += " AND date(created_at) >= ?"
+            params.append(start_date)
         
-        if phone:
-            query += " AND client_phone LIKE ?"
-            params.append(f'%{phone}%')
+        if end_date:
+            query += " AND date(created_at) <= ?"
+            params.append(end_date)
 
         query += " ORDER BY created_at DESC"
 
@@ -850,6 +876,77 @@ def search_transactions():
         
     except Exception as e:
         app.logger.error(f"Unexpected error in search: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+        
+    finally:
+        if conn:
+            conn.close()
+
+@app.route('/api/transactions/summary', methods=['GET'])
+def transaction_summary():
+    conn = None
+    try:
+        date = request.args.get('date', '').strip()
+        if not date:
+            return jsonify({'error': 'Date parameter is required'}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Get summary for the date
+        summary_query = """
+        SELECT 
+            COUNT(*) as total_transactions,
+            SUM(amount) as total_amount,
+            SUM(CASE WHEN transaction_type = 'in' THEN amount ELSE 0 END) as total_in,
+            SUM(CASE WHEN transaction_type = 'out' THEN amount ELSE 0 END) as total_out
+        FROM financial_transactions
+        WHERE date(created_at) = ?
+        """
+        cursor.execute(summary_query, (date,))
+        summary = cursor.fetchone()
+
+        # Get transactions for the date
+        transactions_query = """
+        SELECT 
+            id,
+            transaction_type,
+            payment_method,
+            amount,
+            client_name,
+            client_phone,
+            strftime('%Y-%m-%d %H:%M:%S', created_at) as created_at
+        FROM financial_transactions
+        WHERE date(created_at) = ?
+        ORDER BY created_at DESC
+        """
+        cursor.execute(transactions_query, (date,))
+        transactions = cursor.fetchall()
+
+        # Convert to JSON-serializable format
+        summary_dict = {
+            'date': date,
+            'total_transactions': summary['total_transactions'],
+            'total_amount': float(summary['total_amount']) if summary['total_amount'] else 0,
+            'total_in': float(summary['total_in']) if summary['total_in'] else 0,
+            'total_out': float(summary['total_out']) if summary['total_out'] else 0,
+            'transactions': []
+        }
+
+        for tx in transactions:
+            tx_dict = dict(tx)
+            if 'amount' in tx_dict:
+                tx_dict['amount'] = float(tx_dict['amount'])
+            summary_dict['transactions'].append(tx_dict)
+
+        return jsonify(summary_dict)
+
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error in summary: {str(e)}")
+        return jsonify({'error': 'Database error', 'details': str(e)}), 500
+        
+    except Exception as e:
+        app.logger.error(f"Unexpected error in summary: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
         
     finally:
@@ -980,6 +1077,14 @@ def searchBill():
 @app.route('/finance')
 def finance():
     return render_template('finance.html')
+
+@app.route('/addFinance')
+def addFinance():
+    return render_template('addFinance.html')
+
+@app.route('/viewFinance')
+def viewFinance():
+    return render_template('viewFinance.html')
 
 @app.route('/advanceOrder')
 def advanceOrder():

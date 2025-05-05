@@ -8,7 +8,7 @@ window.handleLogin = function () {
   const username = document.getElementById("username").value;
   const password = document.getElementById("password").value;
 
-  if (username === "admin" && password === "admin") {
+  if (username === "admin" && password === "Nayak@2016") {
     window.location.href = "/dashboard";
   } else {
     alert("Invalid credentials! Try admin / admin");

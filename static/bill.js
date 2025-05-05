@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', function() {
   // Initialize the app
-  fetchFishItems();
   addFishItemRow();
   
   // Event listeners
@@ -13,56 +12,10 @@ document.addEventListener('DOMContentLoaded', function() {
   
 });
 
-
-
 // Global variables
 let fishItems = [];
 let itemCounter = 0;
 
-// Fetch fish items from backend
-async function fetchFishItems() {
-  try {
-    console.log('Fetching fish items...'); // Debug log
-    const response = await fetch('http://localhost:5000/api/fish_items');
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    fishItems = await response.json();
-    console.log('Fish items fetched:', fishItems); // Debug log
-    populateFishSelects();
-  } catch (error) {
-    console.error('Error fetching fish items:', error);
-    alert('Error loading fish items. Check console for details.');
-  }
-}
-
-// Populate fish select dropdowns
-function populateFishSelects() {
-  const selects = document.querySelectorAll('.fish-name');
-  console.log(`Populating ${selects.length} fish selects`); // Debug log
-  
-  selects.forEach(select => {
-    const currentValue = select.value;
-    select.innerHTML = '<option value="">Select Fish</option>';
-    
-    fishItems.forEach(item => {
-      const option = document.createElement('option');
-      option.value = item.name;
-      option.textContent = `${item.name} (₹${item.current_price.toFixed(2)})`;
-      option.dataset.price = item.current_price;
-      select.appendChild(option);
-    });
-    
-    const otherOption = document.createElement('option');
-    otherOption.value = 'Other';
-    otherOption.textContent = 'Other';
-    select.appendChild(otherOption);
-    
-    if (currentValue) select.value = currentValue;
-  });
-}
 
 // Add new fish item row
 function addFishItemRow() {
@@ -70,17 +23,7 @@ function addFishItemRow() {
   const tbody = document.getElementById('fish-items-body');
   const row = document.createElement('tr');
   row.innerHTML = `
-    <td>
-      <select class="fish-name">
-        <option value="">Select Fish</option>
-        ${fishItems.map(item => 
-          `<option value="${item.name}" data-price="${item.current_price}">
-            ${item.name} (₹${item.current_price.toFixed(2)})
-          </option>`
-        ).join('')}
-        <option value="Other">Other</option>
-      </select>
-    </td>
+    <td><input type="text" class="fish-name" placeholder="Enter fish name"></td>
     <td><input type="number" class="fish-quantity" min="0" step="0.1" value="0"></td>
     <td><input type="number" class="fish-price" min="0" step="0.01" value="0.00"></td>
     <td class="item-total">₹0.00</td>
@@ -120,18 +63,19 @@ function calculateBill() {
     subtotal += total;
   });
   
-  const tax = subtotal * 0.05;
-  const totalAmount = subtotal + tax;
+  const taxInput = parseFloat(document.getElementById('tax-amount').value) || 0;
+  const taxAmt = subtotal * (taxInput/100);
+  const totalAmount = subtotal + taxAmt;
   const amountPaid = parseFloat(document.getElementById('amount-paid').value) || 0;
   const previousBalance = parseFloat(document.getElementById('previous-balance').value) || 0;
   const balanceDue = totalAmount + previousBalance - amountPaid;
   
   document.getElementById('subtotal').textContent = `₹${subtotal.toFixed(2)}`;
-  document.getElementById('tax').textContent = `₹${tax.toFixed(2)}`;
+  document.getElementById('tax-amount').textContent = `${taxInput.toFixed(2)}`;
   document.getElementById('total-amount').textContent = `₹${totalAmount.toFixed(2)}`;
   document.getElementById('balance-due').textContent = `₹${balanceDue.toFixed(2)}`;
   
-  console.log('Calculation complete:', { subtotal, tax, totalAmount, balanceDue }); // Debug log
+  console.log('Calculation complete:', { subtotal, taxAmt, totalAmount, balanceDue }); // Debug log
 }
 
 // Generate final bill preview
@@ -141,7 +85,7 @@ function generateFinalBill() {
   const customerName = document.getElementById('customer-name').value;
   const customerPhone = document.getElementById('customer-phone').value;
   const subtotal = document.getElementById('subtotal').textContent;
-  const tax = document.getElementById('tax').textContent;
+  const taxInput = document.getElementById('tax-amount').textContent;
   const totalAmount = document.getElementById('total-amount').textContent;
   const amountPaid = document.getElementById('amount-paid').value;
   const previousBalance = document.getElementById('previous-balance').value;
@@ -184,9 +128,9 @@ function generateFinalBill() {
   billPreview.innerHTML = `
     <div class="final-bill">
       <div class="bill-header">
-        <h3>Nayak Fisheries</h3>
-        <p>Bhadrak, Odisha, India</p>
-        <p>Phone: (555) 123-4567</p>
+        <h3>Nayak Fish Store</h3>
+        <p>Barikpur , Bhadrak , Odisha </p>
+        <p>Phone: +91 6372663125</p>
       </div>
       
       <div class="bill-meta">
@@ -214,8 +158,8 @@ function generateFinalBill() {
           <span>${subtotal}</span>
         </div>
         <div class="total-row">
-          <span>Tax (5%):</span>
-          <span>${tax}</span>
+          <span>Tax (%):</span>
+          <span>${taxInput}%</span>
         </div>
         <div class="total-row">
           <span>Previous Balance:</span>
@@ -266,7 +210,7 @@ async function saveBillToBackend() {
   const customerName = document.getElementById('customer-name').value.trim();
   const customerPhone = document.getElementById('customer-phone').value.trim();
   const subtotal = parseFloat(document.getElementById('subtotal').textContent.replace('₹', ''));
-  const tax = parseFloat(document.getElementById('tax').textContent.replace('₹', ''));
+  const taxAmt = parseFloat(document.getElementById('tax-amount').textContent.replace('₹', ''));
   const totalAmount = parseFloat(document.getElementById('total-amount').textContent.replace('₹', ''));
   const amountPaid = parseFloat(document.getElementById('amount-paid').value) || 0;
   const previousBalance = parseFloat(document.getElementById('previous-balance').value) || 0;
@@ -319,7 +263,7 @@ async function saveBillToBackend() {
     bill_date: billDate,
     items: items,
     subtotal: subtotal,
-    tax: tax,
+    tax: taxAmt,
     total_amount: totalAmount,
     previous_balance: previousBalance,
     amount_paid: amountPaid,
@@ -460,14 +404,14 @@ async function saveBillToBackend() {
     previewDiv.className = 'final-bill';
     previewDiv.innerHTML = `
       <div class="bill-header">
-        <h3>Nayak Fisheries</h3>
-        <p>Bhadrak, Odisha, India</p>
-        <p>Phone: (555) 123-4567</p>
+        <h3>Nayak Fish Store</h3>
+        <p>Barikpur ,Bhadrak, Odisha</p>
+        <p>Phone: +91 6372663125</p>
       </div>
       
       <div class="bill-meta">
         <p><strong>Bill #:</strong> ${bill.id}</p>
-        <p><strong>Date:</strong> ${new Date(bill.bill_date).toLocaleDateString()}</p>
+        <p><strong>Date:</strong> ${bill.bill_date}</p>
         <p><strong>Bill To:</strong> ${bill.customer_name || 'Walk-in Customer'} ${bill.customer_phone ? `(${bill.customer_phone})` : ''}</p>
       </div>
       
@@ -491,8 +435,8 @@ async function saveBillToBackend() {
           <span>₹${parseFloat(bill.subtotal).toFixed(2)}</span>
         </div>
         <div class="total-row">
-          <span>Tax (5%):</span>
-          <span>₹${parseFloat(bill.tax).toFixed(2)}</span>
+          <span>Tax:</span>
+          <span>${parseFloat(bill.tax).toFixed(2)}%</span>
         </div>
         <div class="total-row">
           <span>Previous Balance:</span>
@@ -510,7 +454,7 @@ async function saveBillToBackend() {
       
       <div class="bill-footer">
         <p>Thank you for your business!</p>
-        <p>Generated on: ${new Date(bill.created_at).toLocaleString()}</p>
+        <p>Generated on: ${new Date(bill.created_at + 'Z').toLocaleString()}</p>
       </div>
     `;
     

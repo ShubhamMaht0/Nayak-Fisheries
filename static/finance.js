@@ -7,26 +7,39 @@ document.addEventListener('DOMContentLoaded', function() {
   let cameraView = null;
 
   // Initialize the app
+  loadAllTransactions();
   initEventListeners();
+  
 
   function initEventListeners() {
-      // File upload handler
-      document.getElementById('upload-receipt').addEventListener('click', () => {
-          document.getElementById('receipt-file').click();
-      });
-      
-      document.getElementById('receipt-file').addEventListener('change', handleFileSelect);
-      
-      // Camera capture handler
-      document.getElementById('capture-receipt').addEventListener('click', handleCameraCapture);
-      
-      // Form submission
-      document.getElementById('save-transaction').addEventListener('click', handleSaveTransaction);
-      
-      // Search functionality
-      document.getElementById('search-transactions').addEventListener('click', searchTransactions);
+    const uploadBtn = document.getElementById('upload-receipt');
+    if (uploadBtn) {
+        uploadBtn.addEventListener('click', () => {
+            document.getElementById('receipt-file').click();
+        });
+    }
 
-  }
+    const fileInput = document.getElementById('receipt-file');
+    if (fileInput) {
+        fileInput.addEventListener('change', handleFileSelect);
+    }
+
+    const captureBtn = document.getElementById('capture-receipt');
+    if (captureBtn) {
+        captureBtn.addEventListener('click', handleCameraCapture);
+    }
+
+    const saveBtn = document.getElementById('save-transaction');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', handleSaveTransaction);
+    }
+
+    const searchBtn = document.getElementById('search-transactions');
+    if (searchBtn) {
+        searchBtn.addEventListener('click', searchTransactions);
+    }
+}
+
 
 
   let allTransactions = [];
@@ -35,7 +48,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const response = await fetch('/api/transactions/search');
     const transactions = await response.json();
     allTransactions = transactions;
-    const selectedDate = document.getElementById('filter-date').value;
+    let selectedDate = document.getElementById('filter-date').value;
+    selectedDate = new Date(selectedDate + 'T00:00:00').toISOString().slice(0, 10);
     if (!selectedDate || allTransactions.length === 0) return;
 
     const { dateSummary, totalSummary } = calculateTransactionSummaries(allTransactions, selectedDate);
@@ -243,16 +257,47 @@ document.addEventListener('DOMContentLoaded', function() {
       currentReceiptImage = null;
   }
 
+  async function loadAllTransactions() {
+    try {
+      const response = await fetch('/api/transactions');
+      if (!response.ok) throw new Error('Failed to load transactions');
+      const transactions = await response.json();
+      displayTransactionResults(transactions);
+    } catch (error) {
+      console.error('Error loading transactions:', error);
+      //alert('Error loading transactions. Please try again.');
+    }
+  }
+
+  async function showDateSummary() {
+    const date = document.getElementById('filter-date').value;
+    if (!date) {
+      alert('Please select a date');
+      return;
+    }
+  
+    try {
+      const response = await fetch(`/api/transactions/summary?date=${date}`);
+      if (!response.ok) throw new Error('Failed to load summary');
+      // ... rest of the function
+    } catch (error) {
+      console.error('Summary error:', error);
+      alert('Error loading summary. Please try again.');
+    }
+  }
+
   // Search Transactions Function - Fixed Version
   async function searchTransactions() {
     const searchBtn = document.getElementById('search-transactions');
-    const name = document.getElementById('search-name').value.trim();
-    const phone = document.getElementById('search-phone').value.trim();
+    const startDate = document.getElementById('search-start-date').value;
+    const endDate = document.getElementById('search-end-date').value;
+
+    
 
     try {
         // Validate input
-        if (!name && !phone) {
-            throw new Error('Please enter name or phone number');
+        if (!startDate && !endDate) {
+            throw new Error('Please enter a start date or end date');
         }
 
         searchBtn.disabled = true;
@@ -260,8 +305,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Build URL with encoded parameters
         const params = new URLSearchParams();
-        if (name) params.append('name', name);
-        if (phone) params.append('phone', phone);
+        if (startDate) params.append('start_date', new Date(startDate + 'T00:00:00').toISOString().slice(0, 10));
+        if (endDate) params.append('end_date', new Date(endDate + 'T00:00:00').toISOString().slice(0, 10));
 
         const response = await fetch(`/api/transactions/search?${params.toString()}`);
         
@@ -303,7 +348,7 @@ function displayTransactionResults(transactions) {
             : 'None';
         
         row.innerHTML = `
-            <td>${new Date(tx.created_at).toLocaleString()}</td>
+            <td>${new Date(tx.created_at + 'Z').toLocaleString()}</td>
             <td><span class="${typeClass}">${typeText}</span></td>
             <td>${tx.payment_method}</td>
             <td>₹${tx.amount.toFixed(2)}</td>
@@ -350,7 +395,7 @@ function calculateTransactionSummaries(transactions, filterDate = null) {
         }
 
         // Compare transaction date with selectedDate
-        const txDate = new Date(tx.created_at);
+        const txDate = new Date(tx.created_at + 'Z');
         const isSameDate = txDate.getDate() === selectedDate.getDate() &&
                            txDate.getMonth() === selectedDate.getMonth() &&
                            txDate.getFullYear() === selectedDate.getFullYear();
